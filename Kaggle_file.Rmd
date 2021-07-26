@@ -44,52 +44,87 @@ train.data$date_time <- as.POSIXlt(train.data$date_time, format = c("%Y-%m-%d %H
 # Split date_time into Y:M:D and time (hour) data
 train.data$month <- as.integer(format(train.data$date_time, "%m"))
 train.data$day <- as.factor(format(train.data$date_time, "%d"))
-train.data$time <- as.factor(format(train.data$date_time, "%H"))
+train.data$time <- as.integer(format(train.data$date_time, "%H"))
 
 test.data$month <- as.integer(format(test.data$date_time, "%m"))
 test.data$day <- as.factor(format(test.data$date_time, "%d"))
-test.data$time <- as.factor(format(test.data$date_time, "%H"))
+test.data$time <- as.integer(format(test.data$date_time, "%H"))
+```
 
-# Creating multiple dataset with only one predictor and dropping date_time features for analysis
-train.data.benzene <- subset(train.data, select = -c(date_time, target_carbon_monoxide, target_nitrogen_oxides))
-#test.data.benzene <- subset(test.data, select = -c(date_time, target_carbon_monoxide, target_nitrogen_oxides))
+## Feature engineering
+```{r}
+# Transform month data into season
+train.data$season <- with(train.data, ifelse(month >= 3 & month <=5, "spring",
+                                             ifelse(month >= 6 & month <=8, "summer", 
+                                                    ifelse(month >= 9 & month <=11, "fall", "winter"))))
 
-train.data.carbon <- subset(train.data, select = -c(date_time, target_benzene, target_nitrogen_oxides))
-#test.data.carbon <- subset(test.data, select = -c(date_time, target_benzene, target_nitrogen_oxides))
+test.data$season <- with(test.data, ifelse(month >= 3 & month <=5, "spring",
+                                             ifelse(month >= 6 & month <=8, "summer", 
+                                                    ifelse(month >= 9 & month <=11, "fall", "winter"))))
 
-train.data.nitrogen <- subset(train.data, select = -c(date_time, target_benzene, target_carbon_monoxide))
-test.data.test <- subset(test.data, select = -c(date_time))
+train.data$season <- as.factor(train.data$season)
+test.data$season <- as.factor(test.data$season)
 ```
 
 ```{r}
-# Transform date and time data into season and daypart
- 
-#get.season <- function(){
- # if (train.data$month >= 3 & train.data$month <= 5) {
-  #  train.data$season <- "spring"
-  #} else {
-  ##train.data$season <- "fall"
-  #}
-#}
+# Transform time data into day section
+train.data$day_type <- with(train.data, ifelse(time >= 2 & time <= 5, "dawn",
+                                                ifelse(time >=6 & time <= 9, "morning", 
+                                                       ifelse(time >= 10 & time <= 13, "noon",
+                                                              ifelse(time >= 14 & time <= 17, "afternoon",
+                                                                     ifelse(time >=18 & time <= 21, "evening",
+                                                                            "midnight"))))))
+
+test.data$day_type <- with(test.data, ifelse(time >= 2 & time <= 5, "dawn",
+                                                ifelse(time >=6 & time <= 9, "morning", 
+                                                       ifelse(time >= 10 & time <= 13, "noon",
+                                                              ifelse(time >= 14 & time <= 17, "afternoon",
+                                                                     ifelse(time >=18 & time <= 21, "evening",
+                                                                            "midnight"))))))
+
+train.data$day_type <- as.factor(train.data$day_type)
+test.data$day_type <- as.factor(test.data$day_type)
 ```
+
+
+## Subsetting dataset for analysis
+```{r}
+# Creating multiple dataset with only one predictor and dropping date_time features for analysis
+train.data.benzene <- subset(train.data,
+                             select = -c(date_time, target_carbon_monoxide, target_nitrogen_oxides, month, time))
+
+train.data.carbon <- subset(train.data,
+                            select = -c(date_time, target_benzene, target_nitrogen_oxides, month, time))
+train.data.nitrogen <- subset(train.data,
+                              select = -c(date_time, target_benzene, target_carbon_monoxide, month, time))
+
+# Create subset of test data with matching features to training data
+test.data.test <- subset(test.data, select = -c(date_time, month, time))
+```
+
 
 ## Creating model
 ```{r}
 # Carbon monoxide
-model_carbon_monoxide <- randomForest(target_carbon_monoxide ~. , 
+model_carbon_monoxide <- randomForest(target_carbon_monoxide ~., 
                                       data = train.data.carbon, ntree = 500)
 
 # Benzene
-model_benzene <- randomForest(target_benzene ~. , 
+model_benzene <- randomForest(target_benzene ~., 
                               data = train.data.benzene, ntree = 500)
 
 # Nitrogen Oxide
-model_nitrogen_oxide <- randomForest(target_nitrogen_oxides ~. , 
+model_nitrogen_oxide <- randomForest(target_nitrogen_oxides ~., 
                                      data = train.data.nitrogen,  ntree = 500)
 ```
 
 ## Predict
 ```{r}
+test.data.test$target_carbon_monoxide <- NA
+test.data.test <- rbind(train.data.carbon[1, ] , test.data.test)
+test.data.test <- test.data.test[-1,]
+test.data.test <- subset(test.data.test, select = -c(target_carbon_monoxide))
+
 predict_carbon_monoxide <- predict(model_carbon_monoxide, newdata = test.data.test)
 predict_benzene <- predict(model_benzene, newdata = test.data.test)
 predict_nitrogen_oxide <- predict(model_nitrogen_oxide, newdata = test.data.test)
