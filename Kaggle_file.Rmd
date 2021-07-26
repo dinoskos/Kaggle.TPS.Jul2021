@@ -1,0 +1,107 @@
+---
+title: "Kaggle_submission"
+author: "Bao Ho"
+date: "7/25/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## Loading library
+```{r}
+library(randomForest)
+library(dplyr)
+```
+## Loading data
+```{r}
+test.data <- read.csv("test.csv", header = T)
+train.data <- read.csv("train.csv", header = T)
+```
+
+## Inspecting 
+```{r}
+# Test for NA
+table(is.na(test.data)) 
+table(is.na(train.data))
+```
+
+```{r}
+# Looking at str of data
+str(train.data)
+str(test.data) #Note that date_time feature is in a wrong class
+```
+
+## Cleaning data
+Convert date time data into two separate column: season and daypart
+```{r}
+# Converting date_time to POSIXlt factor then to numeric
+test.data$date_time <- as.POSIXlt(test.data$date_time, format = c("%Y-%m-%d %H:%M:%S"))
+train.data$date_time <- as.POSIXlt(train.data$date_time, format = c("%Y-%m-%d %H:%M:%S"))
+
+# Split date_time into Y:M:D and time (hour) data
+train.data$month <- as.integer(format(train.data$date_time, "%m"))
+train.data$day <- as.factor(format(train.data$date_time, "%d"))
+train.data$time <- as.factor(format(train.data$date_time, "%H"))
+
+test.data$month <- as.integer(format(test.data$date_time, "%m"))
+test.data$day <- as.factor(format(test.data$date_time, "%d"))
+test.data$time <- as.factor(format(test.data$date_time, "%H"))
+
+# Creating multiple dataset with only one predictor and dropping date_time features for analysis
+train.data.benzene <- subset(train.data, select = -c(date_time, target_carbon_monoxide, target_nitrogen_oxides))
+#test.data.benzene <- subset(test.data, select = -c(date_time, target_carbon_monoxide, target_nitrogen_oxides))
+
+train.data.carbon <- subset(train.data, select = -c(date_time, target_benzene, target_nitrogen_oxides))
+#test.data.carbon <- subset(test.data, select = -c(date_time, target_benzene, target_nitrogen_oxides))
+
+train.data.nitrogen <- subset(train.data, select = -c(date_time, target_benzene, target_carbon_monoxide))
+test.data.test <- subset(test.data, select = -c(date_time))
+```
+
+```{r}
+# Transform date and time data into season and daypart
+ 
+#get.season <- function(){
+ # if (train.data$month >= 3 & train.data$month <= 5) {
+  #  train.data$season <- "spring"
+  #} else {
+  ##train.data$season <- "fall"
+  #}
+#}
+```
+
+## Creating model
+```{r}
+# Carbon monoxide
+model_carbon_monoxide <- randomForest(target_carbon_monoxide ~. , 
+                                      data = train.data.carbon, ntree = 500)
+
+# Benzene
+model_benzene <- randomForest(target_benzene ~. , 
+                              data = train.data.benzene, ntree = 500)
+
+# Nitrogen Oxide
+model_nitrogen_oxide <- randomForest(target_nitrogen_oxides ~. , 
+                                     data = train.data.nitrogen,  ntree = 500)
+```
+
+## Predict
+```{r}
+predict_carbon_monoxide <- predict(model_carbon_monoxide, newdata = test.data.test)
+predict_benzene <- predict(model_benzene, newdata = test.data.test)
+predict_nitrogen_oxide <- predict(model_nitrogen_oxide, newdata = test.data.test)
+```
+
+## Creating output dataframe
+```{r}
+output_df <- subset(test.data, select = c(date_time))
+output_df$target_carbon_monoxide <- predict_carbon_monoxide
+output_df$target_benzene <- predict_benzene
+output_df$target_nitrogen_oxides <- predict_nitrogen_oxide
+
+write.csv(output_df, file = "Kaggle_Jul2021.csv", row.names = F)
+```
+
